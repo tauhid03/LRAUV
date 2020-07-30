@@ -4,9 +4,10 @@ from queue import Queue
 import os
 from matplotlib import cbook, patches
 import matplotlib.transforms as mtransforms
+from ForceField import plot_vector_field, ForceField
 class SimView(object):
     q = Queue()
-    def __init__(self, plt):
+    def __init__(self, plt, FF = None):
         self.plt = plt
         self.fig, self.ax = plt.subplots()
         self.xEst = np.zeros((4, 1))
@@ -17,6 +18,7 @@ class SimView(object):
         with cbook.get_sample_data(img_path) as image_file:
             self.image = self.plt.imread(image_file)
 
+        self.FF = FF
     def plot_vehicle(self, x, y , theta):
         offset_theta = np.deg2rad(90)
         theta = np.rad2deg(theta + offset_theta)%360
@@ -34,9 +36,12 @@ class SimView(object):
         v, yawrate = self.u
 
         # plot dummy vehicle image
-        x, y, theta, _ = self.xEst
+        x, y, theta= self.xEst[0, 0], self.xEst[1, 0], self.xEst[2, 0]
         self.plot_vehicle(x, y, theta)
 
+        # plot vector field
+        if (isinstance(self.FF, ForceField)):
+            plot_vector_field(self.ax, [-10, 30], self.FF)
         # plot information
         self.plt.title("V = {}, Yaw = {}".format(v, yawrate))
         self.plt.axis([-10, 30, -10, 30])

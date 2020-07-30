@@ -4,6 +4,7 @@ import numpy as np
 from threading import Thread
 from ekf import observation, ekf_estimation
 from time import sleep
+from ForceField import ForceField
 
 # plt.gcf().canvas.mpl_connect('key_release_event',
 #                              lambda event: [exit(0) if event.key == 'escape' else None])
@@ -15,8 +16,9 @@ class TethysEnv(Thread):
     terminate = False
     q = Queue()
 
-    def __init__(self, view):
+    def __init__(self, view, FF = None):
         self.view = view
+        self.FF = FF
         Thread.__init__(self)
         self.v = 0
         self.yawrate = 0
@@ -31,7 +33,24 @@ class TethysEnv(Thread):
 
     def update(self):
         self.xTrue, z, self.xDR, ud = observation(self.xTrue, self.xDR, self.u)
-        self.xEst, self.PEst = ekf_estimation(self.xEst, self.PEst, z, ud)
+        if( isinstance(self.FF, ForceField)):
+            r = [self.xEst[0, 0], self.xEst[1, 0]]
+
+            u, phi = self.FF.control_input(r)
+            ku, kw = 0.001, -0.001
+            w = self.xEst[2, 0] + phi + self.xEst[3, 0]
+            uF = np.array([[ku *u], [kw * w]])
+            # add external force to control input with process noise
+            ud += uF
+            # visualizing the effect of external force
+            # print('uF', uF.T, ', u', self.u.T)
+            # self.v += ku *u
+            # self.yawrate += kw * w
+            # self.yawrate = self.fixInput(self.yawrate, YAW_MAX)
+            # self.u = np.array([[self.v], [self.yawrate]])
+
+
+        self.xEst, self.PEst = ekf_estimation(self.xEst, self.PEst, z, ud )
 
 
     def fixInput(self, u, u_max):
@@ -57,14 +76,9 @@ class TethysEnv(Thread):
             self.layer += 1
         elif (a_ind == 5):
             self.layer -= 1
-
         self.v = self.fixInput(self.v, V_MAX)
         self.yawrate = self.fixInput(self.yawrate, YAW_MAX)
         self.u = np.array([[self.v], [self.yawrate]])
-
-
-
-
 
     def run(self) -> None:
         '''
@@ -78,10 +92,11 @@ class TethysEnv(Thread):
                     index = self.values.index(key)
                     # print(' {0} pressed {1}'.format(key, index))
                     self.step(a_ind=index)
-                    self.update()
-                    self.view.q.put([self.xEst, self.PEst, self.u])
+
                     sleep(0.01)
             sleep(0.01)
+            self.update()
+            self.view.q.put([self.xEst, self.PEst, self.u])
 
 
 
